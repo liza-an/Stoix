@@ -1,0 +1,19 @@
+defaults:
+  - logger: base_logger
+  - arch: anakin
+  - system: search/ff_az
+  - network: mlp
+  - env: bell_state_env
+  - _self_
+
+hydra:
+  searchpath:
+    - file:///Users/liza/Diploma/Stoix/stoix/configs
+
+env:
+  scenario:
+    name: bell_state_env
+  module_path: stoix.custom_environments.bell_state_env.BellStateEnv
+  multi_agent: false
+  kwargs:
+    max_steps: 5

@@ -1,4 +1,5 @@
 import copy
+import importlib
 from typing import Tuple
 
 import gymnax
@@ -387,6 +388,42 @@ def make_envpool_factory(env_name: str, config: DictConfig) -> EnvPoolFactory:
     return env_factory
 
 
+def make_custom_env(config: DictConfig) -> Tuple[Environment, Environment]:
+    """
+    Create a custom environment for training and evaluation using dynamic imports.
+
+    Args:
+        config (Dict): The configuration of the environment.
+
+    Returns:
+        A tuple of the training and evaluation environments.
+    """
+    module_path = config.env.module_path
+    env_kwargs = dict(copy.deepcopy(config.env.kwargs))
+
+    # Dynamically import the custom environment
+    module_name, class_name = module_path.rsplit(".", 1)
+    env_class = getattr(importlib.import_module(module_name), class_name)
+
+    # Initialize training and evaluation environments
+    env = env_class(**env_kwargs)
+    eval_env = env_class(**env_kwargs)
+
+    # Wrap the environments
+    observation_attribute = config.env.observation_attribute if 'observation_attribute' in config.env.keys() else None
+    env = JumanjiWrapper(env, observation_attribute, config.env.multi_agent)
+    eval_env = JumanjiWrapper(eval_env, observation_attribute, config.env.multi_agent)
+
+    env = AutoResetWrapper(env, next_obs_in_extras=True)
+    eval_env = AutoResetWrapper(eval_env, next_obs_in_extras=True)
+
+    env = RecordEpisodeMetrics(env)
+    eval_env = RecordEpisodeMetrics(eval_env)
+
+    return env, eval_env
+
+
+
 def make(config: DictConfig) -> Tuple[Environment, Environment]:
     """
     Create environments for training and evaluation..
@@ -399,7 +436,9 @@ def make(config: DictConfig) -> Tuple[Environment, Environment]:
     """
     env_name = config.env.scenario.name
 
-    if env_name in gymnax_environments:
+    if "module_path" in config.env and config.env.module_path:
+        envs = make_custom_env(config)
+    elif env_name in gymnax_environments:
         envs = make_gymnax_env(env_name, config)
     elif env_name in JUMANJI_REGISTRY:
         envs = make_jumanji_env(env_name, config)
